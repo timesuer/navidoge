@@ -1,0 +1,57 @@
+{
+  "Version": 1,
+  "WorkspaceRootPath": "C:\\projects\\Csharp\\mynavidoge\\",
+  "Documents": [
+    {
+      "AbsoluteMoniker": "D:0:0:{6EF0F4D5-C6CE-4D31-8D3F-5126B8E76CA3}|navidoge\\navidoge.csproj|c:\\projects\\csharp\\mynavidoge\\navidoge\\mainwindow.xaml||{F11ACC28-31D1-4C80-A34B-F4E09D3D753C}",
+      "RelativeMoniker": "D:0:0:{6EF0F4D5-C6CE-4D31-8D3F-5126B8E76CA3}|navidoge\\navidoge.csproj|solutionrelative:navidoge\\mainwindow.xaml||{F11ACC28-31D1-4C80-A34B-F4E09D3D753C}"
+    },
+    {
+      "AbsoluteMoniker": "D:0:0:{6EF0F4D5-C6CE-4D31-8D3F-5126B8E76CA3}|navidoge\\navidoge.csproj|c:\\projects\\csharp\\mynavidoge\\navidoge\\mainwindow.xaml.cs||{A6C744A8-0E4A-4FC6-886A-064283054674}",
+      "RelativeMoniker": "D:0:0:{6EF0F4D5-C6CE-4D31-8D3F-5126B8E76CA3}|navidoge\\navidoge.csproj|solutionrelative:navidoge\\mainwindow.xaml.cs||{A6C744A8-0E4A-4FC6-886A-064283054674}"
+    }
+  ],
+  "DocumentGroupContainers": [
+    {
+      "Orientation": 0,
+      "VerticalTabListWidth": 256,
+      "DocumentGroups": [
+        {
+          "DockedWidth": 200,
+          "SelectedChildIndex": 1,
+          "Children": [
+            {
+              "$type": "Bookmark",
+              "Name": "ST:0:0:{cce594b6-0c39-4442-ba28-10c64ac7e89f}"
+            },
+            {
+              "$type": "Document",
+              "DocumentIndex": 0,
+              "Title": "MainWindow.xaml",
+              "DocumentMoniker": "C:\\projects\\Csharp\\mynavidoge\\navidoge\\MainWindow.xaml",
+              "RelativeDocumentMoniker": "navidoge\\MainWindow.xaml",
+              "ToolTip": "C:\\projects\\Csharp\\mynavidoge\\navidoge\\MainWindow.xaml",
+              "RelativeToolTip": "navidoge\\MainWindow.xaml",
+              "Icon": "ae27a6b0-e345-4288-96df-5eaf394ee369.003549|",
+              "WhenOpened": "2026-01-21T03:32:22.273Z",
+              "EditorCaption": ""
+            },
+            {
+              "$type": "Document",
+              "DocumentIndex": 1,
+              "Title": "MainWindow.xaml.cs",
+              "DocumentMoniker": "C:\\projects\\Csharp\\mynavidoge\\navidoge\\MainWindow.xaml.cs",
+              "RelativeDocumentMoniker": "navidoge\\MainWindow.xaml.cs",
+              "ToolTip": "C:\\projects\\Csharp\\mynavidoge\\navidoge\\MainWindow.xaml.cs",
+              "RelativeToolTip": "navidoge\\MainWindow.xaml.cs",
+              "ViewState": "AgIAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA==",
+              "Icon": "ae27a6b0-e345-4288-96df-5eaf394ee369.000738|",
+              "WhenOpened": "2026-01-21T03:32:19.149Z",
+              "EditorCaption": ""
+            }
+          ]
+        }
+      ]
+    }
+  ]
+}
