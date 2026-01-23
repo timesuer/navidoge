@@ -56,9 +56,17 @@
 
         <!-- 左侧面板 - 搜索区 -->
         <Border Grid.Column="0" Background="#F5F5F5" Padding="15">
-            <ScrollViewer VerticalScrollBarVisibility="Auto">
-                <StackPanel>
-                    <!-- 数据库连接 -->
+            <Grid>
+                <Grid.RowDefinitions>
+                    <RowDefinition Height="Auto"/>
+                    <RowDefinition Height="Auto"/>
+                    <RowDefinition Height="*" MinHeight="100"/>
+                    <RowDefinition Height="Auto"/>
+                    <RowDefinition Height="Auto"/>
+                </Grid.RowDefinitions>
+                
+                <!-- 数据库连接区域 -->
+                <StackPanel Grid.Row="0">
                     <TextBlock Text="📌 数据库连接" Style="{StaticResource HeaderStyle}"/>
                     
                     <!-- 未连接时显示选择器 -->
@@ -128,57 +136,61 @@
                             </Style>
                         </Button.Style>
                     </Button>
+                </StackPanel>
 
-                    <!-- 表选择 -->
+                <!-- 表选择标题和按钮 -->
+                <StackPanel Grid.Row="1">
                     <TextBlock Text="📋 选择搜索表" Style="{StaticResource HeaderStyle}" Margin="0,20,0,5"/>
-
                     <StackPanel Orientation="Horizontal" Margin="0,0,0,10">
                         <Button Content="全选" Command="{Binding SelectAllCommand}"
                                 Style="{StaticResource SmallButtonStyle}"/>
                         <Button Content="取消全选" Command="{Binding DeselectAllCommand}"
                                 Style="{StaticResource SmallButtonStyle}"/>
                     </StackPanel>
+                </StackPanel>
 
-                    <Border BorderBrush="#DDD" BorderThickness="1" MaxHeight="200" Background="White">
-                        <ListBox x:Name="TableListBox"
-                                 ItemsSource="{Binding Tables}"
-                                 SelectionMode="Extended"
-                                 BorderThickness="0"
-                                 VirtualizingStackPanel.IsVirtualizing="False"
-                                 ScrollViewer.VerticalScrollBarVisibility="Auto">
-                            <ListBox.ItemContainerStyle>
-                                <Style TargetType="ListBoxItem">
-                                    <Setter Property="IsSelected" Value="{Binding IsSelected, Mode=TwoWay}"/>
-                                    <Setter Property="Padding" Value="5,3"/>
-                                    <Setter Property="HorizontalContentAlignment" Value="Stretch"/>
-                                    <Style.Triggers>
-                                        <Trigger Property="IsSelected" Value="True">
-                                            <Setter Property="Background" Value="#BBDEFB"/>
-                                            <Setter Property="Foreground" Value="#1565C0"/>
-                                        </Trigger>
-                                    </Style.Triggers>
-                                </Style>
-                            </ListBox.ItemContainerStyle>
-                            <ListBox.ItemTemplate>
-                                <DataTemplate>
-                                    <TextBlock Text="{Binding TableName}" Margin="2,1"/>
-                                </DataTemplate>
-                            </ListBox.ItemTemplate>
-                        </ListBox>
-                    </Border>
+                <!-- 表列表 - 自适应高度 -->
+                <Border Grid.Row="2" BorderBrush="#DDD" BorderThickness="1" Background="White">
+                    <ListBox x:Name="TableListBox"
+                             ItemsSource="{Binding Tables}"
+                             SelectionMode="Extended"
+                             BorderThickness="0"
+                             VirtualizingStackPanel.IsVirtualizing="True"
+                             ScrollViewer.VerticalScrollBarVisibility="Auto">
+                        <ListBox.ItemContainerStyle>
+                            <Style TargetType="ListBoxItem">
+                                <Setter Property="IsSelected" Value="{Binding IsSelected, Mode=TwoWay}"/>
+                                <Setter Property="Padding" Value="5,3"/>
+                                <Setter Property="HorizontalContentAlignment" Value="Stretch"/>
+                                <Style.Triggers>
+                                    <Trigger Property="IsSelected" Value="True">
+                                        <Setter Property="Background" Value="#BBDEFB"/>
+                                        <Setter Property="Foreground" Value="#1565C0"/>
+                                    </Trigger>
+                                </Style.Triggers>
+                            </Style>
+                        </ListBox.ItemContainerStyle>
+                        <ListBox.ItemTemplate>
+                            <DataTemplate>
+                                <TextBlock Text="{Binding TableName}" Margin="2,1"/>
+                            </DataTemplate>
+                        </ListBox.ItemTemplate>
+                    </ListBox>
+                </Border>
 
-                    <!-- 表名过滤 -->
-                    <Grid Margin="0,8,0,0">
-                        <TextBox x:Name="TableFilterBox"
-                                 Text="{Binding TableFilter, UpdateSourceTrigger=PropertyChanged}"
-                                 Padding="8,6"
-                                 BorderBrush="#CCC" BorderThickness="1"/>
-                        <TextBlock Text="过滤表名..." Foreground="#999" Margin="10,7,0,0"
-                                   IsHitTestVisible="False"
-                                   Visibility="{Binding Text, ElementName=TableFilterBox, Converter={StaticResource StringToVisibilityConverter}, ConverterParameter=invert}"/>
-                    </Grid>
+                <!-- 表名过滤 -->
+                <Grid Grid.Row="3" Margin="0,8,0,0">
+                    <TextBox x:Name="TableFilterBox"
+                             Text="{Binding TableFilter, UpdateSourceTrigger=PropertyChanged}"
+                             Padding="8,6"
+                             BorderBrush="#CCC" BorderThickness="1"/>
+                    <TextBlock Text="过滤表名..." Foreground="#999" Margin="10,7,0,0"
+                               IsHitTestVisible="False"
+                               Visibility="{Binding Text, ElementName=TableFilterBox, Converter={StaticResource StringToVisibilityConverter}, ConverterParameter=invert}"/>
+                </Grid>
 
-                    <!-- 搜索 -->
+                <!-- 搜索区域 -->
+                <StackPanel Grid.Row="4">
                     <TextBlock Text="🔎 查找字符串" Style="{StaticResource HeaderStyle}" Margin="0,20,0,5"/>
                     <TextBox Text="{Binding SearchText, UpdateSourceTrigger=PropertyChanged}" 
                              Style="{StaticResource InputStyle}"
@@ -190,7 +202,7 @@
                             FontSize="16"
                             IsEnabled="{Binding IsConnected}"/>
                 </StackPanel>
-            </ScrollViewer>
+            </Grid>
         </Border>
 
         <!-- 右侧面板 - 结果区 -->
