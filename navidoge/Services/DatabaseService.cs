@@ -20,6 +20,14 @@ public class DatabaseService
     }
 
     /// <summary>
+    /// 清除当前连接
+    /// </summary>
+    public void ClearConnection()
+    {
+        _currentConnection = null;
+    }
+
+    /// <summary>
     /// 获取连接字符串
     /// </summary>
     public string? GetConnectionString() => _currentConnection?.ConnectionString;

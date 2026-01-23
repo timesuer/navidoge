@@ -5,21 +5,28 @@ namespace navidoge.Models;
 /// </summary>
 public class AppSettings
 {
-    /// <summary>主机地址</summary>
+    /// <summary>主机地址（保留兼容）</summary>
     public string Host { get; set; } = "localhost";
 
-    /// <summary>端口</summary>
+    /// <summary>端口（保留兼容）</summary>
     public string Port { get; set; } = "3306";
 
-    /// <summary>数据库名</summary>
+    /// <summary>数据库名（保留兼容）</summary>
     public string Database { get; set; } = "";
 
-    /// <summary>用户名</summary>
+    /// <summary>用户名（保留兼容）</summary>
     public string Username { get; set; } = "root";
 
-    /// <summary>密码</summary>
+    /// <summary>密码（保留兼容）</summary>
     public string Password { get; set; } = "";
 
     /// <summary>上次选中的表名列表</summary>
     public List<string> SelectedTables { get; set; } = new();
+
+    /// <summary>数据库连接配置列表</summary>
+    public List<DatabaseProfile> ConnectionProfiles { get; set; } = new();
+
+    /// <summary>上次使用的配置ID</summary>
+    public string? LastUsedProfileId { get; set; }
 }
+

@@ -17,6 +17,7 @@ public partial class MainViewModel : ObservableObject
     private readonly SettingsService _settingsService;
     private List<TableInfo> _allTables = new();
     private HashSet<string> _savedSelectedTables = new();
+    private DataTable? _unfilteredDataTable;
 
     /// <summary>数据库服务（供外部访问）</summary>
     public DatabaseService DatabaseService => _databaseService;
@@ -24,7 +25,21 @@ public partial class MainViewModel : ObservableObject
     /// <summary>当前显示的表名</summary>
     public string? CurrentTableName => SelectedResult?.TableName;
 
+    /// <summary>筛选条件列表</summary>
+    public ObservableCollection<FilterCondition> FilterConditions { get; } = new();
+
+    /// <summary>数据库连接配置列表</summary>
+    public ObservableCollection<DatabaseProfile> ConnectionProfiles { get; } = new();
+
     #region 属性
+
+    /// <summary>选中的连接配置</summary>
+    [ObservableProperty]
+    private DatabaseProfile? _selectedConnectionProfile;
+
+    /// <summary>当前连接的配置别名（连接后显示）</summary>
+    [ObservableProperty]
+    private string _currentProfileAlias = "";
 
     /// <summary>主机地址</summary>
     [ObservableProperty]
@@ -101,16 +116,56 @@ public partial class MainViewModel : ObservableObject
     }
 
     /// <summary>
+    /// 当选中的配置改变时，更新连接参数
+    /// </summary>
+    partial void OnSelectedConnectionProfileChanged(DatabaseProfile? value)
+    {
+        if (value != null)
+        {
+            Host = value.Host;
+            Port = value.Port;
+            Database = value.Database;
+            Username = value.Username;
+            Password = value.Password;
+        }
+    }
+
+    /// <summary>
     /// 加载配置
     /// </summary>
     private void LoadSettings()
     {
         var settings = _settingsService.Load();
-        Host = settings.Host;
-        Port = settings.Port;
-        Database = settings.Database;
-        Username = settings.Username;
-        Password = settings.Password;
+        
+        // 加载连接配置列表
+        ConnectionProfiles.Clear();
+        foreach (var profile in settings.ConnectionProfiles)
+        {
+            ConnectionProfiles.Add(profile);
+        }
+
+        // 兼容旧版配置：如果没有新配置但有旧的连接信息，创建一个默认配置
+        if (ConnectionProfiles.Count == 0 && !string.IsNullOrEmpty(settings.Host))
+        {
+            var defaultProfile = new DatabaseProfile
+            {
+                Alias = "默认配置",
+                Host = settings.Host,
+                Port = settings.Port,
+                Database = settings.Database,
+                Username = settings.Username,
+                Password = settings.Password
+            };
+            ConnectionProfiles.Add(defaultProfile);
+        }
+
+        // 选中上次使用的配置
+        if (!string.IsNullOrEmpty(settings.LastUsedProfileId))
+        {
+            SelectedConnectionProfile = ConnectionProfiles.FirstOrDefault(p => p.Id == settings.LastUsedProfileId);
+        }
+        SelectedConnectionProfile ??= ConnectionProfiles.FirstOrDefault();
+
         _savedSelectedTables = new HashSet<string>(settings.SelectedTables);
     }
 
@@ -126,9 +181,36 @@ public partial class MainViewModel : ObservableObject
             Database = Database,
             Username = Username,
             Password = Password,
-            SelectedTables = _allTables.Where(t => t.IsSelected).Select(t => t.TableName).ToList()
+            SelectedTables = _allTables.Where(t => t.IsSelected).Select(t => t.TableName).ToList(),
+            ConnectionProfiles = ConnectionProfiles.ToList(),
+            LastUsedProfileId = SelectedConnectionProfile?.Id
         };
         _settingsService.Save(settings);
+    }
+
+    /// <summary>
+    /// 更新连接配置列表（从配置管理窗口调用）
+    /// </summary>
+    public void UpdateConnectionProfiles(List<DatabaseProfile> profiles)
+    {
+        var currentId = SelectedConnectionProfile?.Id;
+        ConnectionProfiles.Clear();
+        foreach (var profile in profiles)
+        {
+            ConnectionProfiles.Add(profile);
+        }
+
+        // 如果当前选中的配置被删除，选择第一个
+        if (currentId == null || !ConnectionProfiles.Any(p => p.Id == currentId))
+        {
+            SelectedConnectionProfile = ConnectionProfiles.FirstOrDefault();
+        }
+        else
+        {
+            SelectedConnectionProfile = ConnectionProfiles.FirstOrDefault(p => p.Id == currentId);
+        }
+
+        SaveSettings();
     }
 
     /// <summary>
@@ -156,10 +238,29 @@ public partial class MainViewModel : ObservableObject
         }
     }
 
+    /// <summary>按钮文本（连接/断开）</summary>
+    [ObservableProperty]
+    private string _connectionButtonText = "🔌 连接数据库";
+
+    /// <summary>
+    /// 切换连接/断开
+    /// </summary>
+    [RelayCommand]
+    private async Task ToggleConnectionAsync()
+    {
+        if (IsConnected)
+        {
+            Disconnect();
+        }
+        else
+        {
+            await ConnectAsync();
+        }
+    }
+
     /// <summary>
     /// 连接数据库
     /// </summary>
-    [RelayCommand]
     private async Task ConnectAsync()
     {
         try
@@ -180,6 +281,8 @@ public partial class MainViewModel : ObservableObject
             if (await _databaseService.TestConnectionAsync())
             {
                 IsConnected = true;
+                ConnectionButtonText = "🔌 断开数据库";
+                CurrentProfileAlias = SelectedConnectionProfile?.Alias ?? "";
                 StatusMessage = $"已连接到 {Database}";
 
                 // 获取表列表
@@ -201,14 +304,34 @@ public partial class MainViewModel : ObservableObject
             else
             {
                 IsConnected = false;
+                ConnectionButtonText = "🔌 连接数据库";
                 StatusMessage = "连接失败";
             }
         }
         catch (Exception ex)
         {
             IsConnected = false;
+            ConnectionButtonText = "🔌 连接数据库";
             StatusMessage = $"连接错误: {ex.Message}";
         }
+    }
+
+    /// <summary>
+    /// 断开数据库连接
+    /// </summary>
+    private void Disconnect()
+    {
+        _databaseService.ClearConnection();
+        IsConnected = false;
+        ConnectionButtonText = "🔌 连接数据库";
+        CurrentProfileAlias = "";
+        Tables.Clear();
+        _allTables.Clear();
+        SearchResults.Clear();
+        CurrentDataTable = null;
+        SearchResultSummary = "";
+        DetailTitle = "";
+        StatusMessage = "已断开连接";
     }
 
     /// <summary>
@@ -285,9 +408,13 @@ public partial class MainViewModel : ObservableObject
     /// </summary>
     partial void OnSelectedResultChanged(SearchResult? value)
     {
+        // 清除筛选条件
+        FilterConditions.Clear();
+
         if (value == null || value.MatchedRows.Count == 0)
         {
             CurrentDataTable = null;
+            _unfilteredDataTable = null;
             DetailTitle = "";
             return;
         }
@@ -315,6 +442,92 @@ public partial class MainViewModel : ObservableObject
             dt.Rows.Add(dataRow);
         }
 
+        _unfilteredDataTable = dt;
         CurrentDataTable = dt;
+    }
+
+    /// <summary>
+    /// 添加筛选条件
+    /// </summary>
+    public void AddFilter(string name, string columnName, string value)
+    {
+        var filter = new FilterCondition(name, columnName, value);
+        FilterConditions.Add(filter);
+        ApplyFilters();
+    }
+
+    /// <summary>
+    /// 移除筛选条件
+    /// </summary>
+    public void RemoveFilter(FilterCondition filter)
+    {
+        FilterConditions.Remove(filter);
+        ApplyFilters();
+    }
+
+    /// <summary>
+    /// 应用所有筛选条件
+    /// </summary>
+    private void ApplyFilters()
+    {
+        if (_unfilteredDataTable == null)
+        {
+            return;
+        }
+
+        if (FilterConditions.Count == 0)
+        {
+            CurrentDataTable = _unfilteredDataTable;
+            UpdateDetailTitle(_unfilteredDataTable.Rows.Count);
+            return;
+        }
+
+        // 创建筛选后的 DataTable
+        var filteredDt = _unfilteredDataTable.Clone();
+
+        foreach (DataRow row in _unfilteredDataTable.Rows)
+        {
+            bool matchAll = true;
+            foreach (var filter in FilterConditions)
+            {
+                if (_unfilteredDataTable.Columns.Contains(filter.ColumnName))
+                {
+                    var cellValue = row[filter.ColumnName]?.ToString() ?? "";
+                    if (!cellValue.Contains(filter.Value, StringComparison.OrdinalIgnoreCase))
+                    {
+                        matchAll = false;
+                        break;
+                    }
+                }
+            }
+
+            if (matchAll)
+            {
+                filteredDt.ImportRow(row);
+            }
+        }
+
+        CurrentDataTable = filteredDt;
+        UpdateDetailTitle(filteredDt.Rows.Count);
+    }
+
+    /// <summary>
+    /// 更新详情标题
+    /// </summary>
+    private void UpdateDetailTitle(int rowCount)
+    {
+        if (SelectedResult != null)
+        {
+            var filterInfo = FilterConditions.Count > 0 ? $"（已筛选，原 {SelectedResult.MatchCount} 条）" : "";
+            DetailTitle = $"表 [{SelectedResult.TableName}] 的匹配数据，共 {rowCount} 条记录{filterInfo}";
+        }
+    }
+
+    /// <summary>
+    /// 获取下一个筛选序号
+    /// </summary>
+    public int GetNextFilterIndex()
+    {
+        return FilterConditions.Count + 1;
     }
 }

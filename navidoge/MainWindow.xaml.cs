@@ -2,6 +2,7 @@ using System.Data;
 using System.Text;
 using System.Windows;
 using System.Windows.Controls;
+using System.Windows.Controls.Primitives;
 using System.Windows.Data;
 using System.Windows.Media;
 using navidoge.Converters;
@@ -57,14 +58,33 @@ public partial class MainWindow : Window
     }
 
     /// <summary>
-    /// 数据详情表格自动生成列时，设置高亮样式
+    /// 打开数据库配置管理窗口
+    /// </summary>
+    private void ManageProfiles_Click(object sender, RoutedEventArgs e)
+    {
+        if (DataContext is MainViewModel vm)
+        {
+            var configWindow = new DatabaseConfigWindow(vm.ConnectionProfiles.ToList())
+            {
+                Owner = this
+            };
+
+            if (configWindow.ShowDialog() == true)
+            {
+                vm.UpdateConnectionProfiles(configWindow.GetProfiles());
+            }
+        }
+    }
+
+    /// <summary>
+    /// 数据详情表格自动生成列时，设置高亮样式和列头右键菜单
     /// </summary>
     private void DetailDataGrid_AutoGeneratingColumn(object sender, DataGridAutoGeneratingColumnEventArgs e)
     {
         if (e.Column is DataGridTextColumn textColumn)
         {
             // 创建带高亮的 CellStyle
-            var style = new Style(typeof(DataGridCell));
+            var cellStyle = new Style(typeof(DataGridCell));
 
             // 使用 DataTrigger 判断单元格是否包含搜索文本
             var trigger = new DataTrigger
@@ -77,9 +97,18 @@ public partial class MainWindow : Window
             };
             trigger.Setters.Add(new Setter(DataGridCell.BackgroundProperty, new SolidColorBrush(Color.FromRgb(255, 255, 0))));
 
-            style.Triggers.Add(trigger);
-            textColumn.CellStyle = style;
+            cellStyle.Triggers.Add(trigger);
+            textColumn.CellStyle = cellStyle;
         }
+
+        // 为列头添加右键菜单
+        var headerStyle = new Style(typeof(DataGridColumnHeader));
+        var contextMenu = new ContextMenu();
+        var filterMenuItem = new MenuItem { Header = "筛选此列" };
+        filterMenuItem.Click += MenuItem_FilterColumn_Click;
+        contextMenu.Items.Add(filterMenuItem);
+        headerStyle.Setters.Add(new Setter(DataGridColumnHeader.ContextMenuProperty, contextMenu));
+        e.Column.HeaderStyle = headerStyle;
     }
 
     /// <summary>
@@ -379,5 +408,48 @@ public partial class MainWindow : Window
             return $"\"{field.Replace("\"", "\"\"")}\"";
         }
         return field;
+    }
+
+    /// <summary>
+    /// 列头右键菜单 - 筛选此列
+    /// </summary>
+    private void MenuItem_FilterColumn_Click(object sender, RoutedEventArgs e)
+    {
+        if (DataContext is not MainViewModel vm) return;
+
+        // 获取点击的列头
+        if (sender is MenuItem menuItem &&
+            menuItem.Parent is ContextMenu contextMenu &&
+            contextMenu.PlacementTarget is DataGridColumnHeader header)
+        {
+            var columnName = header.Content?.ToString();
+            if (string.IsNullOrEmpty(columnName)) return;
+
+            // 显示筛选对话框
+            var dialog = new FilterDialog(columnName, vm.GetNextFilterIndex())
+            {
+                Owner = this
+            };
+
+            if (dialog.ShowDialog() == true)
+            {
+                vm.AddFilter(dialog.FilterName, dialog.ColumnName, dialog.FilterValue);
+                vm.StatusMessage = $"已添加筛选: {dialog.FilterName}";
+            }
+        }
+    }
+
+    /// <summary>
+    /// 移除筛选标签
+    /// </summary>
+    private void FilterTag_Remove_Click(object sender, RoutedEventArgs e)
+    {
+        if (DataContext is not MainViewModel vm) return;
+
+        if (sender is Button button && button.Tag is Models.FilterCondition filter)
+        {
+            vm.RemoveFilter(filter);
+            vm.StatusMessage = $"已移除筛选: {filter.Name}";
+        }
     }
 }

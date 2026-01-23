@@ -8,5 +8,6 @@
         <converters:ContainsSearchTextConverter x:Key="ContainsSearchTextConverter"/>
         <converters:HighlightConverter x:Key="HighlightConverter"/>
         <converters:StringToVisibilityConverter x:Key="StringToVisibilityConverter"/>
+        <converters:BoolToVisibilityConverter x:Key="BoolToVisibilityConverter"/>
     </Application.Resources>
 </Application>

@@ -1,0 +1,10 @@
+{
+  "permissions": {
+    "allow": [
+      "Bash(dotnet build:*)",
+      "Bash(del \"C:\\\\projects\\\\Csharp\\\\mynavidoge\\\\navidoge\\\\TestConnection.cs\")",
+      "Bash(git add:*)",
+      "Bash(git commit:*)"
+    ]
+  }
+}

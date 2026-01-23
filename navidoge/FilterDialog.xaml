@@ -1,0 +1,38 @@
+<Window x:Class="navidoge.FilterDialog"
+        xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
+        xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+        Title="添加筛选条件"
+        Height="200" Width="350"
+        WindowStartupLocation="CenterOwner"
+        ResizeMode="NoResize"
+        ShowInTaskbar="False">
+    <Grid Margin="20">
+        <Grid.RowDefinitions>
+            <RowDefinition Height="Auto"/>
+            <RowDefinition Height="Auto"/>
+            <RowDefinition Height="Auto"/>
+            <RowDefinition Height="*"/>
+            <RowDefinition Height="Auto"/>
+        </Grid.RowDefinitions>
+        <Grid.ColumnDefinitions>
+            <ColumnDefinition Width="80"/>
+            <ColumnDefinition Width="*"/>
+        </Grid.ColumnDefinitions>
+
+        <TextBlock Grid.Row="0" Grid.Column="0" Text="筛选列:" VerticalAlignment="Center" Margin="0,0,0,10"/>
+        <TextBlock Grid.Row="0" Grid.Column="1" x:Name="ColumnNameText" FontWeight="Bold" VerticalAlignment="Center" Margin="0,0,0,10"/>
+
+        <TextBlock Grid.Row="1" Grid.Column="0" Text="筛选名称:" VerticalAlignment="Center" Margin="0,0,0,10"/>
+        <TextBox Grid.Row="1" Grid.Column="1" x:Name="FilterNameBox" Padding="5,3" Margin="0,0,0,10"/>
+
+        <TextBlock Grid.Row="2" Grid.Column="0" Text="筛选值:" VerticalAlignment="Center" Margin="0,0,0,10"/>
+        <TextBox Grid.Row="2" Grid.Column="1" x:Name="FilterValueBox" Padding="5,3" Margin="0,0,0,10"/>
+
+        <StackPanel Grid.Row="4" Grid.ColumnSpan="2" Orientation="Horizontal" HorizontalAlignment="Right">
+            <Button Content="确定" Width="80" Padding="10,5" Margin="0,0,10,0" Click="OkButton_Click"
+                    Background="#4CAF50" Foreground="White" BorderThickness="0"/>
+            <Button Content="取消" Width="80" Padding="10,5" Click="CancelButton_Click"
+                    Background="#9E9E9E" Foreground="White" BorderThickness="0"/>
+        </StackPanel>
+    </Grid>
+</Window>

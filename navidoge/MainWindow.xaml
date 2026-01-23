@@ -61,30 +61,73 @@
                     <!-- 数据库连接 -->
                     <TextBlock Text="📌 数据库连接" Style="{StaticResource HeaderStyle}"/>
                     
-                    <TextBlock Text="主机:" Margin="0,5,0,2"/>
-                    <TextBox Text="{Binding Host, UpdateSourceTrigger=PropertyChanged}" 
-                             Style="{StaticResource InputStyle}"/>
+                    <!-- 未连接时显示选择器 -->
+                    <StackPanel Visibility="{Binding IsConnected, Converter={StaticResource BoolToVisibilityConverter}, ConverterParameter=invert}">
+                        <TextBlock Text="选择配置:" Margin="0,5,0,2"/>
+                        <Grid Margin="0,0,0,8">
+                            <Grid.ColumnDefinitions>
+                                <ColumnDefinition Width="*"/>
+                                <ColumnDefinition Width="Auto"/>
+                            </Grid.ColumnDefinitions>
+                            <ComboBox Grid.Column="0"
+                                      ItemsSource="{Binding ConnectionProfiles}"
+                                      SelectedItem="{Binding SelectedConnectionProfile}"
+                                      DisplayMemberPath="DisplayText"
+                                      Padding="8,6"/>
+                            <Button Grid.Column="1" Content="⚙" Width="35" Margin="5,0,0,0"
+                                    Click="ManageProfiles_Click"
+                                    ToolTip="管理数据库配置"
+                                    Background="#757575" Foreground="White" 
+                                    BorderThickness="0" Cursor="Hand"/>
+                        </Grid>
+                        
+                        <TextBlock Text="数据库:" Margin="0,0,0,2"/>
+                        <TextBox Text="{Binding Database, UpdateSourceTrigger=PropertyChanged}" 
+                                 Style="{StaticResource InputStyle}"/>
+
+                        <TextBlock Text="密码:" Margin="0,0,0,2"/>
+                        <PasswordBox x:Name="PasswordBox" Padding="8,6" Margin="0,0,0,8"
+                                     BorderBrush="#CCC" BorderThickness="1"/>
+                    </StackPanel>
                     
-                    <TextBlock Text="端口:" Margin="0,0,0,2"/>
-                    <TextBox Text="{Binding Port, UpdateSourceTrigger=PropertyChanged}" 
-                             Style="{StaticResource InputStyle}"/>
+                    <!-- 已连接时显示简化信息 -->
+                    <Border Visibility="{Binding IsConnected, Converter={StaticResource BoolToVisibilityConverter}}"
+                            Background="White" BorderBrush="#4CAF50" BorderThickness="1" 
+                            CornerRadius="5" Padding="10" Margin="0,5,0,8">
+                        <StackPanel>
+                            <TextBlock FontWeight="SemiBold" Foreground="#4CAF50" Margin="0,0,0,5">
+                                <Run Text="✓ 已连接"/>
+                            </TextBlock>
+                            <TextBlock Foreground="#666">
+                                <Run Text="IP: "/>
+                                <Run Text="{Binding Host}" FontWeight="SemiBold"/>
+                                <Run Text=":"/>
+                                <Run Text="{Binding Port}" FontWeight="SemiBold"/>
+                            </TextBlock>
+                            <TextBlock Foreground="#666">
+                                <Run Text="备注: "/>
+                                <Run Text="{Binding CurrentProfileAlias}" FontWeight="SemiBold"/>
+                            </TextBlock>
+                            <TextBlock Foreground="#666" Margin="0,3,0,0">
+                                <Run Text="数据库: "/>
+                                <Run Text="{Binding Database}" FontWeight="SemiBold"/>
+                            </TextBlock>
+                        </StackPanel>
+                    </Border>
                     
-                    <TextBlock Text="数据库:" Margin="0,0,0,2"/>
-                    <TextBox Text="{Binding Database, UpdateSourceTrigger=PropertyChanged}" 
-                             Style="{StaticResource InputStyle}"/>
-                    
-                    <TextBlock Text="用户名:" Margin="0,0,0,2"/>
-                    <TextBox Text="{Binding Username, UpdateSourceTrigger=PropertyChanged}" 
-                             Style="{StaticResource InputStyle}"/>
-                    
-                    <TextBlock Text="密码:" Margin="0,0,0,2"/>
-                    <PasswordBox x:Name="PasswordBox" Padding="8,6" Margin="0,0,0,8"
-                                 BorderBrush="#CCC" BorderThickness="1"/>
-                    
-                    <Button Content="🔌 连接数据库" 
-                            Command="{Binding ConnectCommand}"
-                            Style="{StaticResource ButtonStyle}"
-                            Click="ConnectButton_Click"/>
+                    <Button Content="{Binding ConnectionButtonText}"
+                            Command="{Binding ToggleConnectionCommand}"
+                            Click="ConnectButton_Click">
+                        <Button.Style>
+                            <Style TargetType="Button" BasedOn="{StaticResource ButtonStyle}">
+                                <Style.Triggers>
+                                    <DataTrigger Binding="{Binding IsConnected}" Value="True">
+                                        <Setter Property="Background" Value="#F44336"/>
+                                    </DataTrigger>
+                                </Style.Triggers>
+                            </Style>
+                        </Button.Style>
+                    </Button>
 
                     <!-- 表选择 -->
                     <TextBlock Text="📋 选择搜索表" Style="{StaticResource HeaderStyle}" Margin="0,20,0,5"/>
@@ -96,8 +139,36 @@
                                 Style="{StaticResource SmallButtonStyle}"/>
                     </StackPanel>
 
+                    <Border BorderBrush="#DDD" BorderThickness="1" MaxHeight="200" Background="White">
+                        <ListBox x:Name="TableListBox"
+                                 ItemsSource="{Binding Tables}"
+                                 SelectionMode="Extended"
+                                 BorderThickness="0"
+                                 VirtualizingStackPanel.IsVirtualizing="False"
+                                 ScrollViewer.VerticalScrollBarVisibility="Auto">
+                            <ListBox.ItemContainerStyle>
+                                <Style TargetType="ListBoxItem">
+                                    <Setter Property="IsSelected" Value="{Binding IsSelected, Mode=TwoWay}"/>
+                                    <Setter Property="Padding" Value="5,3"/>
+                                    <Setter Property="HorizontalContentAlignment" Value="Stretch"/>
+                                    <Style.Triggers>
+                                        <Trigger Property="IsSelected" Value="True">
+                                            <Setter Property="Background" Value="#BBDEFB"/>
+                                            <Setter Property="Foreground" Value="#1565C0"/>
+                                        </Trigger>
+                                    </Style.Triggers>
+                                </Style>
+                            </ListBox.ItemContainerStyle>
+                            <ListBox.ItemTemplate>
+                                <DataTemplate>
+                                    <TextBlock Text="{Binding TableName}" Margin="2,1"/>
+                                </DataTemplate>
+                            </ListBox.ItemTemplate>
+                        </ListBox>
+                    </Border>
+
                     <!-- 表名过滤 -->
-                    <Grid Margin="0,0,0,8">
+                    <Grid Margin="0,8,0,0">
                         <TextBox x:Name="TableFilterBox"
                                  Text="{Binding TableFilter, UpdateSourceTrigger=PropertyChanged}"
                                  Padding="8,6"
@@ -106,20 +177,6 @@
                                    IsHitTestVisible="False"
                                    Visibility="{Binding Text, ElementName=TableFilterBox, Converter={StaticResource StringToVisibilityConverter}, ConverterParameter=invert}"/>
                     </Grid>
-
-                    <Border BorderBrush="#DDD" BorderThickness="1" MaxHeight="200" Background="White">
-                        <ScrollViewer VerticalScrollBarVisibility="Auto">
-                            <ItemsControl ItemsSource="{Binding Tables}">
-                                <ItemsControl.ItemTemplate>
-                                    <DataTemplate>
-                                        <CheckBox Content="{Binding TableName}"
-                                                  IsChecked="{Binding IsSelected}"
-                                                  Margin="5,3"/>
-                                    </DataTemplate>
-                                </ItemsControl.ItemTemplate>
-                            </ItemsControl>
-                        </ScrollViewer>
-                    </Border>
 
                     <!-- 搜索 -->
                     <TextBlock Text="🔎 查找字符串" Style="{StaticResource HeaderStyle}" Margin="0,20,0,5"/>
@@ -192,6 +249,36 @@
                 <TextBlock Text="(选择上方表格查看匹配数据)"
                            Foreground="#888" FontSize="12"
                            Visibility="{Binding DetailTitle, Converter={StaticResource StringToVisibilityConverter}, ConverterParameter=invert}"/>
+
+                <!-- 筛选标签区域 -->
+                <ItemsControl ItemsSource="{Binding FilterConditions}" Margin="0,5,0,0">
+                    <ItemsControl.ItemsPanel>
+                        <ItemsPanelTemplate>
+                            <WrapPanel Orientation="Horizontal"/>
+                        </ItemsPanelTemplate>
+                    </ItemsControl.ItemsPanel>
+                    <ItemsControl.ItemTemplate>
+                        <DataTemplate>
+                            <Border Background="#E3F2FD" BorderBrush="#2196F3" BorderThickness="1"
+                                    CornerRadius="3" Padding="8,4" Margin="0,0,8,5">
+                                <StackPanel Orientation="Horizontal">
+                                    <TextBlock VerticalAlignment="Center">
+                                        <Run Text="{Binding Name}" FontWeight="SemiBold"/>
+                                        <Run Text=": "/>
+                                        <Run Text="{Binding ColumnName}" Foreground="#666"/>
+                                        <Run Text="="/>
+                                        <Run Text="{Binding Value}" Foreground="#2196F3"/>
+                                    </TextBlock>
+                                    <Button Content="✕" Margin="8,0,0,0" Padding="4,0"
+                                            Background="Transparent" BorderThickness="0"
+                                            Foreground="#666" Cursor="Hand" FontSize="10"
+                                            Click="FilterTag_Remove_Click"
+                                            Tag="{Binding}"/>
+                                </StackPanel>
+                            </Border>
+                        </DataTemplate>
+                    </ItemsControl.ItemTemplate>
+                </ItemsControl>
             </StackPanel>
 
             <!-- 数据详情 -->
