@@ -283,40 +283,60 @@ public partial class MainWindow : Window
     }
 
     /// <summary>
-    /// 复制选中行数据到剪贴板
+    /// 复制选中单元格数据到剪贴板
     /// </summary>
-    private void MenuItem_CopyData_Click(object sender, RoutedEventArgs e)
+    private void MenuItem_CopyCellData_Click(object sender, RoutedEventArgs e)
     {
-        var selectedItems = DetailDataGrid.SelectedItems;
-        if (selectedItems.Count == 0)
+        var currentCell = DetailDataGrid.CurrentCell;
+        if (currentCell.Column == null || currentCell.Item == null)
+        {
+            MessageBox.Show("请先选择要复制的单元格", "提示", MessageBoxButton.OK, MessageBoxImage.Information);
+            return;
+        }
+
+        if (currentCell.Item is DataRowView rowView)
+        {
+            var columnName = currentCell.Column.Header?.ToString() ?? "";
+            var cellValue = rowView.Row[columnName]?.ToString() ?? "";
+            Clipboard.SetText(cellValue);
+
+            if (DataContext is MainViewModel vm)
+            {
+                vm.StatusMessage = $"已复制单元格数据: {cellValue}";
+            }
+        }
+    }
+
+    /// <summary>
+    /// 复制当前行数据到剪贴板
+    /// </summary>
+    private void MenuItem_CopyRowData_Click(object sender, RoutedEventArgs e)
+    {
+        var currentCell = DetailDataGrid.CurrentCell;
+        if (currentCell.Item == null)
         {
             MessageBox.Show("请先选择要复制的行", "提示", MessageBoxButton.OK, MessageBoxImage.Information);
             return;
         }
 
-        var sb = new StringBuilder();
-
-        // 添加表头
-        if (selectedItems[0] is DataRowView firstRow)
+        if (currentCell.Item is DataRowView rowView)
         {
-            var headers = firstRow.Row.Table.Columns.Cast<DataColumn>().Select(c => c.ColumnName);
+            var sb = new StringBuilder();
+
+            // 添加表头
+            var headers = rowView.Row.Table.Columns.Cast<DataColumn>().Select(c => c.ColumnName);
             sb.AppendLine(string.Join("\t", headers));
-        }
 
-        // 添加数据行
-        foreach (var item in selectedItems)
-        {
-            if (item is DataRowView rowView)
+            // 添加数据行
+            var values = rowView.Row.ItemArray.Select(v => v?.ToString() ?? "");
+            sb.AppendLine(string.Join("\t", values));
+
+            Clipboard.SetText(sb.ToString());
+
+            if (DataContext is MainViewModel vm)
             {
-                var values = rowView.Row.ItemArray.Select(v => v?.ToString() ?? "");
-                sb.AppendLine(string.Join("\t", values));
+                vm.StatusMessage = "已复制本行数据到剪贴板";
             }
-        }
-
-        Clipboard.SetText(sb.ToString());
-        if (DataContext is MainViewModel vm)
-        {
-            vm.StatusMessage = $"已复制 {selectedItems.Count} 行数据到剪贴板";
         }
     }
 

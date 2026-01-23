@@ -60,7 +60,7 @@
                 <Grid.RowDefinitions>
                     <RowDefinition Height="Auto"/>
                     <RowDefinition Height="Auto"/>
-                    <RowDefinition Height="*" MinHeight="100"/>
+                    <RowDefinition Height="*"/>
                     <RowDefinition Height="Auto"/>
                     <RowDefinition Height="Auto"/>
                 </Grid.RowDefinitions>
@@ -309,6 +309,15 @@
                       CanUserAddRows="False"
                       CellEditEnding="DetailDataGrid_CellEditEnding"
                       BeginningEdit="DetailDataGrid_BeginningEdit">
+                <DataGrid.CellStyle>
+                    <Style TargetType="DataGridCell">
+                        <Style.Triggers>
+                            <Trigger Property="IsSelected" Value="True">
+                                <Setter Property="Foreground" Value="Black"/>
+                            </Trigger>
+                        </Style.Triggers>
+                    </Style>
+                </DataGrid.CellStyle>
                 <DataGrid.ContextMenu>
                     <ContextMenu>
                         <MenuItem Header="删除选中行" Click="MenuItem_DeleteRows_Click"/>
