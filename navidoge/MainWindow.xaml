@@ -322,7 +322,9 @@
                     <ContextMenu>
                         <MenuItem Header="删除选中行" Click="MenuItem_DeleteRows_Click"/>
                         <Separator/>
-                        <MenuItem Header="复制数据" Click="MenuItem_CopyData_Click"/>
+                        <MenuItem Header="复制单元格" Click="MenuItem_CopyCellData_Click"/>
+                        <MenuItem Header="复制本行数据" Click="MenuItem_CopyRowData_Click"/>
+                        <Separator/>
                         <MenuItem Header="复制为 INSERT 语句" Click="MenuItem_CopyAsInsert_Click"/>
                         <MenuItem Header="复制为 CSV" Click="MenuItem_CopyAsCsv_Click"/>
                     </ContextMenu>
