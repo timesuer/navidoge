@@ -28,5 +28,20 @@ public class AppSettings
 
     /// <summary>上次使用的配置ID</summary>
     public string? LastUsedProfileId { get; set; }
+
+    /// <summary>上次同步时间</summary>
+    public DateTime? LastSyncAt { get; set; }
+
+    /// <summary>同步开始时间</summary>
+    public DateTime? SyncStartTime { get; set; }
+
+    /// <summary>同步结束时间</summary>
+    public DateTime? SyncEndTime { get; set; }
+
+    /// <summary>同步选中的表名列表</summary>
+    public List<string> SyncSelectedTables { get; set; } = new();
+
+    /// <summary>同步目标配置ID</summary>
+    public string? SyncTargetProfileId { get; set; }
 }
 

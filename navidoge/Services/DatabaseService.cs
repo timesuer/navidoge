@@ -86,7 +86,7 @@ public class DatabaseService
     }
 
     /// <summary>
-    /// 获取表的主键列
+    /// 获取表的主键列（使用当前连接）
     /// </summary>
     public async Task<List<string>> GetPrimaryKeysAsync(string tableName)
     {
@@ -95,13 +95,7 @@ public class DatabaseService
         await using var conn = new MySqlConnection(_currentConnection.ConnectionString);
         await conn.OpenAsync();
 
-        var keys = await conn.QueryAsync<string>(
-            @"SELECT COLUMN_NAME FROM INFORMATION_SCHEMA.KEY_COLUMN_USAGE
-              WHERE TABLE_SCHEMA = @Database AND TABLE_NAME = @TableName AND CONSTRAINT_NAME = 'PRIMARY'
-              ORDER BY ORDINAL_POSITION",
-            new { _currentConnection.Database, TableName = tableName });
-
-        return keys.ToList();
+        return await GetPrimaryKeysAsync(conn, _currentConnection.Database, tableName);
     }
 
     /// <summary>
@@ -251,5 +245,165 @@ public class DatabaseService
         }
 
         return result;
+    }
+
+    /// <summary>
+    /// 同步指定表到目标数据库（带时间范围）
+    /// </summary>
+    public async Task<List<TableSyncResult>> SyncTablesAsync(
+        DatabaseConnection source,
+        DatabaseConnection target,
+        IEnumerable<string> tableNames,
+        DateTime? startTime,
+        DateTime? endTime)
+    {
+        var results = new List<TableSyncResult>();
+
+        await using var sourceConn = new MySqlConnection(source.ConnectionString);
+        await using var targetConn = new MySqlConnection(target.ConnectionString);
+        await sourceConn.OpenAsync();
+        await targetConn.OpenAsync();
+
+        foreach (var tableName in tableNames)
+        {
+            var tableResult = new TableSyncResult { TableName = tableName };
+
+            try
+            {
+                // 检查源表的主键（用于识别唯一记录）
+                var primaryKeys = await GetPrimaryKeysAsync(sourceConn, source.Database, tableName);
+                if (primaryKeys.Count == 0)
+                {
+                    tableResult.Success = false;
+                    tableResult.Message = "跳过：源表无主键";
+                    results.Add(tableResult);
+                    continue;
+                }
+
+                var timeColumn = await GetFirstDateColumnAsync(sourceConn, source.Database, tableName);
+                tableResult.MissingTimeColumn = string.IsNullOrEmpty(timeColumn) && (startTime.HasValue || endTime.HasValue);
+
+
+                var selectSql = $"SELECT * FROM `{tableName}`";
+                var conditions = new List<string>();
+                var parameters = new DynamicParameters();
+
+                if (!string.IsNullOrEmpty(timeColumn))
+                {
+                    if (startTime.HasValue)
+                    {
+                        // 开始时间从当天 00:00:00 开始
+                        conditions.Add($"`{timeColumn}` >= @StartTime");
+                        parameters.Add("StartTime", startTime.Value.Date);
+                    }
+                    if (endTime.HasValue)
+                    {
+                        // 结束时间到当天 23:59:59.999 结束（即下一天的开始）
+                        conditions.Add($"`{timeColumn}` < @EndTime");
+                        parameters.Add("EndTime", endTime.Value.Date.AddDays(1));
+                    }
+                }
+
+                if (conditions.Count > 0)
+                {
+                    selectSql += " WHERE " + string.Join(" AND ", conditions);
+                }
+
+                var rows = await sourceConn.QueryAsync(selectSql, parameters);
+
+                int synced = 0;
+                foreach (var row in rows)
+                {
+                    var data = (IDictionary<string, object?>)row;
+                    if (data.Count == 0) continue;
+
+                    var upsertSql = BuildUpsertSql(tableName, data.Keys.ToList(), primaryKeys);
+                    await targetConn.ExecuteAsync(upsertSql, data);
+                    synced++;
+                }
+
+                tableResult.Success = true;
+                tableResult.SyncedCount = synced;
+                
+                if (synced == 0)
+                {
+                    if (!string.IsNullOrEmpty(timeColumn) && (startTime.HasValue || endTime.HasValue))
+                    {
+                        tableResult.Message = $"无数据（时间列: {timeColumn}）";
+                    }
+                    else
+                    {
+                        tableResult.Message = "无数据需要同步";
+                    }
+                }
+                else
+                {
+                    tableResult.Message = tableResult.MissingTimeColumn 
+                        ? "已全量同步（缺少时间列）" 
+                        : !string.IsNullOrEmpty(timeColumn) ? $"同步成功（时间列: {timeColumn}）" : "同步成功";
+                }
+            }
+            catch (Exception ex)
+            {
+                tableResult.Success = false;
+                tableResult.Message = $"失败：{ex.Message}";
+            }
+
+            results.Add(tableResult);
+        }
+
+        return results;
+    }
+
+    private static async Task<List<string>> GetPrimaryKeysAsync(MySqlConnection conn, string database, string tableName)
+    {
+        var keys = await conn.QueryAsync<string>(
+            @"SELECT COLUMN_NAME FROM INFORMATION_SCHEMA.KEY_COLUMN_USAGE
+              WHERE TABLE_SCHEMA = @Database AND TABLE_NAME = @TableName AND CONSTRAINT_NAME = 'PRIMARY'
+              ORDER BY ORDINAL_POSITION",
+            new { Database = database, TableName = tableName });
+
+        return keys.ToList();
+    }
+
+    private static async Task<string?> GetFirstDateColumnAsync(MySqlConnection conn, string database, string tableName)
+    {
+        // 优先查找常用的创建时间列名
+        var preferredColumns = new[] { "create_time", "create_time_", "created_at", "created_time", "createtime", "create_date", "order_date", "order_time" };
+        
+        var allDateColumns = await conn.QueryAsync<string>(
+            @"SELECT COLUMN_NAME FROM INFORMATION_SCHEMA.COLUMNS
+              WHERE TABLE_SCHEMA = @Database AND TABLE_NAME = @TableName
+                AND DATA_TYPE IN ('datetime','timestamp','date')
+              ORDER BY ORDINAL_POSITION",
+            new { Database = database, TableName = tableName });
+
+        var columnList = allDateColumns.ToList();
+        
+        // 优先返回常用的创建时间列
+        foreach (var preferred in preferredColumns)
+        {
+            var match = columnList.FirstOrDefault(c => c.Equals(preferred, StringComparison.OrdinalIgnoreCase));
+            if (match != null) return match;
+        }
+        
+        // 如果没有匹配的，返回第一个时间列
+        return columnList.FirstOrDefault();
+    }
+
+    private static string BuildUpsertSql(string tableName, IReadOnlyCollection<string> columns, List<string> primaryKeys)
+    {
+        var columnList = string.Join(", ", columns.Select(c => $"`{c}`"));
+        var paramList = string.Join(", ", columns.Select(c => $"@{c}"));
+
+        var updateColumns = columns
+            .Where(c => !primaryKeys.Contains(c))
+            .Select(c => $"`{c}` = VALUES(`{c}`)");
+
+        var updateClause = updateColumns.Any()
+            ? string.Join(", ", updateColumns)
+            : string.Join(", ", primaryKeys.Select(k => $"`{k}` = VALUES(`{k}`)"));
+
+        return $"INSERT INTO `{tableName}` ({columnList}) VALUES ({paramList}) ON DUPLICATE KEY UPDATE {updateClause}";
     }
 }

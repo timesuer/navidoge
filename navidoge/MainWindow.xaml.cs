@@ -77,6 +77,32 @@ public partial class MainWindow : Window
     }
 
     /// <summary>
+    /// 表列表双击时，切换选中状态
+    /// </summary>
+    private void TableListBox_MouseDoubleClick(object sender, System.Windows.Input.MouseButtonEventArgs e)
+    {
+        if (TableListBox.SelectedItem is Models.TableInfo tableInfo)
+        {
+            tableInfo.IsSelected = !tableInfo.IsSelected;
+        }
+    }
+
+    /// <summary>
+    /// 打开数据同步窗口
+    /// </summary>
+    private void OpenSyncWindow_Click(object sender, RoutedEventArgs e)
+    {
+        if (DataContext is MainViewModel vm)
+        {
+            var syncWindow = new SyncWindow(vm)
+            {
+                Owner = this
+            };
+            syncWindow.ShowDialog();
+        }
+    }
+
+    /// <summary>
     /// 数据详情表格自动生成列时，设置高亮样式和列头右键菜单
     /// </summary>
     private void DetailDataGrid_AutoGeneratingColumn(object sender, DataGridAutoGeneratingColumnEventArgs e)

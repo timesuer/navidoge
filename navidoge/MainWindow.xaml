@@ -136,6 +136,12 @@
                             </Style>
                         </Button.Style>
                     </Button>
+                    
+                    <Button Content="⚡ 数据同步" 
+                            Click="OpenSyncWindow_Click"
+                            Style="{StaticResource ButtonStyle}"
+                            Background="#FF9800"
+                            Margin="0,5,0,0"/>
                 </StackPanel>
 
                 <!-- 表选择标题和按钮 -->
@@ -156,23 +162,27 @@
                              SelectionMode="Extended"
                              BorderThickness="0"
                              VirtualizingStackPanel.IsVirtualizing="True"
-                             ScrollViewer.VerticalScrollBarVisibility="Auto">
+                             ScrollViewer.VerticalScrollBarVisibility="Auto"
+                             MouseDoubleClick="TableListBox_MouseDoubleClick">
                         <ListBox.ItemContainerStyle>
                             <Style TargetType="ListBoxItem">
-                                <Setter Property="IsSelected" Value="{Binding IsSelected, Mode=TwoWay}"/>
                                 <Setter Property="Padding" Value="5,3"/>
                                 <Setter Property="HorizontalContentAlignment" Value="Stretch"/>
                                 <Style.Triggers>
-                                    <Trigger Property="IsSelected" Value="True">
+                                    <DataTrigger Binding="{Binding IsSelected}" Value="True">
                                         <Setter Property="Background" Value="#BBDEFB"/>
                                         <Setter Property="Foreground" Value="#1565C0"/>
-                                    </Trigger>
+                                    </DataTrigger>
                                 </Style.Triggers>
                             </Style>
                         </ListBox.ItemContainerStyle>
                         <ListBox.ItemTemplate>
                             <DataTemplate>
-                                <TextBlock Text="{Binding TableName}" Margin="2,1"/>
+                                <StackPanel Orientation="Horizontal">
+                                    <TextBlock Text="✓" Foreground="#1565C0" FontWeight="Bold" Margin="0,0,5,0"
+                                               Visibility="{Binding IsSelected, Converter={StaticResource BoolToVisibilityConverter}}"/>
+                                    <TextBlock Text="{Binding TableName}" Margin="2,1"/>
+                                </StackPanel>
                             </DataTemplate>
                         </ListBox.ItemTemplate>
                     </ListBox>

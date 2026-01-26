@@ -2,6 +2,7 @@ using System.Collections.ObjectModel;
 using System.Data;
 using CommunityToolkit.Mvvm.ComponentModel;
 using CommunityToolkit.Mvvm.Input;
+using Dapper;
 using navidoge.Models;
 using navidoge.Services;
 
@@ -17,6 +18,7 @@ public partial class MainViewModel : ObservableObject
     private readonly SettingsService _settingsService;
     private List<TableInfo> _allTables = new();
     private HashSet<string> _savedSelectedTables = new();
+    private HashSet<string> _savedSyncSelectedTables = new();
     private DataTable? _unfilteredDataTable;
 
     /// <summary>数据库服务（供外部访问）</summary>
@@ -65,9 +67,13 @@ public partial class MainViewModel : ObservableObject
     [ObservableProperty]
     private string _searchText = "";
 
-    /// <summary>表过滤文本</summary>
+    /// <summary>表过滤文本（主窗口用）</summary>
     [ObservableProperty]
     private string _tableFilter = "";
+
+    /// <summary>同步表过滤文本（同步窗口用）</summary>
+    [ObservableProperty]
+    private string _syncTableFilter = "";
 
     /// <summary>是否正在搜索</summary>
     [ObservableProperty]
@@ -93,8 +99,17 @@ public partial class MainViewModel : ObservableObject
     [ObservableProperty]
     private string _detailTitle = "";
 
-    /// <summary>表列表</summary>
+    /// <summary>表列表（主窗口用）</summary>
     public ObservableCollection<TableInfo> Tables { get; } = new();
+
+    /// <summary>同步表列表（同步窗口用，独立过滤）</summary>
+    public ObservableCollection<TableInfo> SyncTables { get; } = new();
+
+    /// <summary>已选择的同步表列表</summary>
+    public ObservableCollection<TableInfo> SelectedSyncTables { get; } = new();
+
+    /// <summary>已选择的同步表数量</summary>
+    public int SelectedSyncTableCount => SelectedSyncTables.Count;
 
     /// <summary>搜索结果列表</summary>
     public ObservableCollection<SearchResult> SearchResults { get; } = new();
@@ -102,6 +117,56 @@ public partial class MainViewModel : ObservableObject
     /// <summary>当前查看的数据行 (使用DataTable以正确显示列)</summary>
     [ObservableProperty]
     private DataTable? _currentDataTable;
+
+    /// <summary>同步开始时间</summary>
+    [ObservableProperty]
+    private DateTime? _syncStartTime;
+
+    /// <summary>同步结束时间</summary>
+    [ObservableProperty]
+    private DateTime? _syncEndTime;
+
+    /// <summary>同步目标配置</summary>
+    [ObservableProperty]
+    private DatabaseProfile? _syncTargetProfile;
+
+    /// <summary>同步源配置（用于同步窗口）</summary>
+    [ObservableProperty]
+    private DatabaseProfile? _syncSourceProfile;
+
+    /// <summary>同步目标配置ID（持久化用）</summary>
+    [ObservableProperty]
+    private string? _syncTargetProfileId;
+
+    /// <summary>上次同步时间</summary>
+    [ObservableProperty]
+    private DateTime? _lastSyncAt;
+
+    /// <summary>同步选中的表</summary>
+    [ObservableProperty]
+    private List<string> _syncSelectedTables = new();
+
+    /// <summary>同步结果摘要</summary>
+    [ObservableProperty]
+    private string _syncSummary = "";
+
+    /// <summary>是否正在同步</summary>
+    [ObservableProperty]
+    private bool _isSyncing;
+
+    /// <summary>同步结果列表</summary>
+    public ObservableCollection<TableSyncResult> SyncResults { get; } = new();
+
+    /// <summary>同步窗口标题（显示同步方向）</summary>
+    public string SyncWindowTitle
+    {
+        get
+        {
+            var source = SyncSourceProfile?.Alias ?? SyncSourceProfile?.Host ?? "未选择";
+            var target = SyncTargetProfile?.Alias ?? SyncTargetProfile?.Host ?? "未选择";
+            return $"数据同步: {source} → {target}";
+        }
+    }
 
     #endregion
 
@@ -136,6 +201,12 @@ public partial class MainViewModel : ObservableObject
     private void LoadSettings()
     {
         var settings = _settingsService.Load();
+
+        SyncStartTime = settings.SyncStartTime;
+        SyncEndTime = settings.SyncEndTime;
+        LastSyncAt = settings.LastSyncAt;
+        SyncTargetProfileId = settings.SyncTargetProfileId;
+        SyncSelectedTables = settings.SyncSelectedTables ?? new List<string>();
         
         // 加载连接配置列表
         ConnectionProfiles.Clear();
@@ -167,6 +238,16 @@ public partial class MainViewModel : ObservableObject
         SelectedConnectionProfile ??= ConnectionProfiles.FirstOrDefault();
 
         _savedSelectedTables = new HashSet<string>(settings.SelectedTables);
+        _savedSyncSelectedTables = new HashSet<string>(SyncSelectedTables ?? new List<string>());
+
+        // 设置同步目标配置
+        if (!string.IsNullOrEmpty(SyncTargetProfileId))
+        {
+            SyncTargetProfile = ConnectionProfiles.FirstOrDefault(p => p.Id == SyncTargetProfileId);
+        }
+
+        // 设置同步源配置（默认使用当前选中的配置）
+        SyncSourceProfile = SelectedConnectionProfile;
     }
 
     /// <summary>
@@ -174,6 +255,10 @@ public partial class MainViewModel : ObservableObject
     /// </summary>
     public void SaveSettings()
     {
+        var selectedTables = _allTables.Where(t => t.IsSelected).Select(t => t.TableName).ToList();
+        var syncSelectedTables = _allTables.Where(t => t.IsSyncSelected).Select(t => t.TableName).ToList();
+        SyncSelectedTables = syncSelectedTables;
+
         var settings = new AppSettings
         {
             Host = Host,
@@ -181,7 +266,12 @@ public partial class MainViewModel : ObservableObject
             Database = Database,
             Username = Username,
             Password = Password,
-            SelectedTables = _allTables.Where(t => t.IsSelected).Select(t => t.TableName).ToList(),
+            SelectedTables = selectedTables,
+            SyncSelectedTables = syncSelectedTables,
+            SyncStartTime = SyncStartTime,
+            SyncEndTime = SyncEndTime,
+            SyncTargetProfileId = SyncTargetProfile?.Id ?? SyncTargetProfileId,
+            LastSyncAt = LastSyncAt,
             ConnectionProfiles = ConnectionProfiles.ToList(),
             LastUsedProfileId = SelectedConnectionProfile?.Id
         };
@@ -210,6 +300,12 @@ public partial class MainViewModel : ObservableObject
             SelectedConnectionProfile = ConnectionProfiles.FirstOrDefault(p => p.Id == currentId);
         }
 
+        if (!string.IsNullOrEmpty(SyncTargetProfileId))
+        {
+            SyncTargetProfile = ConnectionProfiles.FirstOrDefault(p => p.Id == SyncTargetProfileId);
+        }
+        SyncTargetProfile ??= ConnectionProfiles.FirstOrDefault();
+
         SaveSettings();
     }
 
@@ -222,7 +318,15 @@ public partial class MainViewModel : ObservableObject
     }
 
     /// <summary>
-    /// 过滤表列表
+    /// 同步表过滤文本改变时过滤同步表列表
+    /// </summary>
+    partial void OnSyncTableFilterChanged(string value)
+    {
+        FilterSyncTables();
+    }
+
+    /// <summary>
+    /// 过滤表列表（主窗口用）
     /// </summary>
     private void FilterTables()
     {
@@ -235,6 +339,130 @@ public partial class MainViewModel : ObservableObject
             {
                 Tables.Add(table);
             }
+        }
+    }
+
+    /// <summary>
+    /// 过滤同步表列表（同步窗口用）
+    /// </summary>
+    private void FilterSyncTables()
+    {
+        SyncTables.Clear();
+        var filter = _syncTableFilter?.Trim().ToLower() ?? "";
+
+        foreach (var table in _allTables)
+        {
+            if (string.IsNullOrEmpty(filter) || table.TableName.ToLower().Contains(filter))
+            {
+                SyncTables.Add(table);
+            }
+        }
+    }
+
+    /// <summary>
+    /// 刷新已选择的同步表列表
+    /// </summary>
+    public void RefreshSelectedSyncTables()
+    {
+        SelectedSyncTables.Clear();
+        foreach (var table in _allTables.Where(t => t.IsSyncSelected))
+        {
+            SelectedSyncTables.Add(table);
+        }
+        OnPropertyChanged(nameof(SelectedSyncTableCount));
+    }
+
+    /// <summary>
+    /// 添加表到已选择列表
+    /// </summary>
+    public void AddToSelectedSyncTables(IEnumerable<TableInfo> tables)
+    {
+        foreach (var table in tables)
+        {
+            table.IsSyncSelected = true;
+        }
+        RefreshSelectedSyncTables();
+    }
+
+    /// <summary>
+    /// 从已选择列表移除表
+    /// </summary>
+    public void RemoveFromSelectedSyncTables(IEnumerable<TableInfo> tables)
+    {
+        foreach (var table in tables)
+        {
+            table.IsSyncSelected = false;
+        }
+        RefreshSelectedSyncTables();
+    }
+
+    /// <summary>
+    /// 初始化同步表列表（打开同步窗口时调用）
+    /// </summary>
+    public async Task InitializeSyncTablesAsync()
+    {
+        _syncTableFilter = "";
+        OnPropertyChanged(nameof(SyncTableFilter));
+        
+        // 如果主窗口已连接，直接使用已有的表列表
+        if (_allTables.Count > 0)
+        {
+            FilterSyncTables();
+            RefreshSelectedSyncTables();
+            return;
+        }
+        
+        // 如果没有连接但有源配置，从源配置加载表列表
+        if (SyncSourceProfile != null)
+        {
+            await LoadSyncTablesFromSourceAsync();
+        }
+    }
+
+    /// <summary>
+    /// 从源配置加载同步表列表
+    /// </summary>
+    public async Task LoadSyncTablesFromSourceAsync()
+    {
+        if (SyncSourceProfile == null) return;
+        
+        try
+        {
+            var connection = new DatabaseConnection
+            {
+                Host = SyncSourceProfile.Host,
+                Port = int.TryParse(SyncSourceProfile.Port, out var p) ? p : 3306,
+                Database = SyncSourceProfile.Database,
+                Username = SyncSourceProfile.Username,
+                Password = SyncSourceProfile.Password
+            };
+
+            await using var conn = new MySqlConnector.MySqlConnection(connection.ConnectionString);
+            await conn.OpenAsync();
+
+            var tables = await conn.QueryAsync<string>(
+                "SELECT TABLE_NAME FROM INFORMATION_SCHEMA.TABLES WHERE TABLE_SCHEMA = @Database AND TABLE_TYPE = 'BASE TABLE'",
+                new { connection.Database });
+
+            _allTables.Clear();
+            SyncTables.Clear();
+            Tables.Clear();
+
+            foreach (var name in tables)
+            {
+                var tableInfo = new TableInfo(name);
+                tableInfo.IsSelected = _savedSelectedTables.Contains(name);
+                tableInfo.IsSyncSelected = _savedSyncSelectedTables.Contains(name);
+                _allTables.Add(tableInfo);
+                SyncTables.Add(tableInfo);
+                Tables.Add(tableInfo);
+            }
+            
+            RefreshSelectedSyncTables();
+        }
+        catch (Exception ex)
+        {
+            System.Diagnostics.Debug.WriteLine($"加载同步表列表失败: {ex.Message}");
         }
     }
 
@@ -289,13 +517,16 @@ public partial class MainViewModel : ObservableObject
                 var tableNames = await _databaseService.GetTablesAsync();
                 _allTables.Clear();
                 Tables.Clear();
+                SyncTables.Clear();
                 foreach (var name in tableNames)
                 {
                     var tableInfo = new TableInfo(name);
                     // 恢复上次的选中状态
                     tableInfo.IsSelected = _savedSelectedTables.Contains(name);
+                    tableInfo.IsSyncSelected = _savedSyncSelectedTables.Contains(name);
                     _allTables.Add(tableInfo);
                     Tables.Add(tableInfo);
+                    SyncTables.Add(tableInfo);
                 }
 
                 // 保存连接配置
@@ -326,6 +557,7 @@ public partial class MainViewModel : ObservableObject
         ConnectionButtonText = "🔌 连接数据库";
         CurrentProfileAlias = "";
         Tables.Clear();
+        SyncTables.Clear();
         _allTables.Clear();
         SearchResults.Clear();
         CurrentDataTable = null;
@@ -380,6 +612,118 @@ public partial class MainViewModel : ObservableObject
     }
 
     /// <summary>
+    /// 同步数据到目标库（内部执行）
+    /// </summary>
+    public async Task ExecuteSyncAsync()
+    {
+        if (IsSyncing) return;
+
+        var sourceProfile = SyncSourceProfile ?? SelectedConnectionProfile;
+        if (sourceProfile == null)
+        {
+            StatusMessage = "请先选择源配置";
+            return;
+        }
+
+        var targetProfile = SyncTargetProfile ?? ConnectionProfiles.FirstOrDefault(p => p.Id == SyncTargetProfileId);
+        if (targetProfile == null)
+        {
+            StatusMessage = "请选择目标配置";
+            return;
+        }
+
+        var selectedTables = _allTables.Where(t => t.IsSyncSelected).Select(t => t.TableName).ToList();
+        if (selectedTables.Count == 0)
+        {
+            StatusMessage = "请选择要同步的表";
+            return;
+        }
+
+        IsSyncing = true;
+        SyncResults.Clear();
+        SyncSummary = "正在同步...";
+        StatusMessage = SyncSummary;
+
+        var sourceConnection = new DatabaseConnection
+        {
+            Host = sourceProfile.Host,
+            Port = int.TryParse(sourceProfile.Port, out var sourcePort) ? sourcePort : 3306,
+            Database = sourceProfile.Database,
+            Username = sourceProfile.Username,
+            Password = sourceProfile.Password
+        };
+
+        var targetConnection = new DatabaseConnection
+        {
+            Host = targetProfile.Host,
+            Port = int.TryParse(targetProfile.Port, out var targetPort) ? targetPort : 3306,
+            Database = targetProfile.Database,
+            Username = targetProfile.Username,
+            Password = targetProfile.Password
+        };
+
+        try
+        {
+            var results = await _databaseService.SyncTablesAsync(
+                sourceConnection,
+                targetConnection,
+                selectedTables,
+                SyncStartTime,
+                SyncEndTime);
+
+            foreach (var result in results)
+            {
+                SyncResults.Add(result);
+            }
+
+            var successCount = results.Count(r => r.Success);
+            var totalSynced = results.Sum(r => r.SyncedCount);
+
+            SyncSummary = $"同步完成：{successCount}/{results.Count} 表成功，共 {totalSynced} 条记录";
+            LastSyncAt = DateTime.Now;
+            SyncTargetProfile = targetProfile;
+            SyncTargetProfileId = targetProfile.Id;
+            SyncSelectedTables = selectedTables;
+            SaveSettings();
+            StatusMessage = SyncSummary;
+        }
+        catch (Exception ex)
+        {
+            SyncSummary = $"同步失败：{ex.Message}";
+            StatusMessage = SyncSummary;
+        }
+        finally
+        {
+            IsSyncing = false;
+        }
+    }
+
+    /// <summary>
+    /// 交换同步方向（源和目标配置互换）
+    /// </summary>
+    public void SwapSyncDirection()
+    {
+        (SyncSourceProfile, SyncTargetProfile) = (SyncTargetProfile, SyncSourceProfile);
+        OnPropertyChanged(nameof(SyncWindowTitle));
+    }
+
+    /// <summary>
+    /// 当同步源配置改变时，更新窗口标题
+    /// </summary>
+    partial void OnSyncSourceProfileChanged(DatabaseProfile? value)
+    {
+        OnPropertyChanged(nameof(SyncWindowTitle));
+    }
+
+    /// <summary>
+    /// 当同步目标配置改变时，更新窗口标题
+    /// </summary>
+    partial void OnSyncTargetProfileChanged(DatabaseProfile? value)
+    {
+        OnPropertyChanged(nameof(SyncWindowTitle));
+    }
+
+    /// <summary>
     /// 全选表
     /// </summary>
     [RelayCommand]
@@ -400,6 +744,30 @@ public partial class MainViewModel : ObservableObject
         foreach (var table in _allTables)
         {
             table.IsSelected = false;
+        }
+    }
+
+    /// <summary>
+    /// 全选同步表
+    /// </summary>
+    [RelayCommand]
+    private void SyncSelectAll()
+    {
+        foreach (var table in _allTables)
+        {
+            table.IsSyncSelected = true;
+        }
+    }
+
+    /// <summary>
+    /// 取消全选同步表
+    /// </summary>
+    [RelayCommand]
+    private void SyncDeselectAll()
+    {
+        foreach (var table in _allTables)
+        {
+            table.IsSyncSelected = false;
         }
     }
 

@@ -15,6 +15,10 @@ public partial class TableInfo : ObservableObject
     [ObservableProperty]
     private bool _isSelected = true;
 
+    /// <summary>是否选中同步</summary>
+    [ObservableProperty]
+    private bool _isSyncSelected = false;
+
     public TableInfo() { }
 
     public TableInfo(string tableName)
