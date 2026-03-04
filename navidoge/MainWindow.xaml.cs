@@ -1,10 +1,12 @@
 using System.Data;
+using System.IO;
 using System.Text;
 using System.Windows;
 using System.Windows.Controls;
 using System.Windows.Controls.Primitives;
 using System.Windows.Data;
 using System.Windows.Media;
+using Microsoft.Win32;
 using navidoge.Converters;
 using navidoge.ViewModels;
 
@@ -497,5 +499,294 @@ public partial class MainWindow : Window
             vm.RemoveFilter(filter);
             vm.StatusMessage = $"已移除筛选: {filter.Name}";
         }
+    }
+
+    private void MenuItem_ShowColumnSelector_Click(object sender, RoutedEventArgs e)
+    {
+        if (DetailDataGrid.Columns.Count == 0)
+        {
+            MessageBox.Show("当前没有可选择的列", "提示", MessageBoxButton.OK, MessageBoxImage.Information);
+            return;
+        }
+
+        var dialog = new Window
+        {
+            Title = "显示筛选（选择显示列）",
+            Width = 320,
+            Height = 420,
+            WindowStartupLocation = WindowStartupLocation.CenterOwner,
+            Owner = this,
+            ResizeMode = ResizeMode.NoResize
+        };
+
+        var root = new DockPanel { Margin = new Thickness(12) };
+        var topPanel = new StackPanel { Margin = new Thickness(0, 0, 0, 8) };
+        var searchBox = new TextBox
+        {
+            Height = 28,
+            Padding = new Thickness(8, 4, 8, 4),
+            Margin = new Thickness(0, 0, 0, 6)
+        };
+        var actionPanel = new StackPanel { Orientation = Orientation.Horizontal };
+        var selectAllBtn = new Button { Content = "全选", Width = 70, Margin = new Thickness(0, 0, 8, 0) };
+        var deselectAllBtn = new Button { Content = "取消全选", Width = 70 };
+        actionPanel.Children.Add(selectAllBtn);
+        actionPanel.Children.Add(deselectAllBtn);
+        topPanel.Children.Add(searchBox);
+        topPanel.Children.Add(actionPanel);
+        DockPanel.SetDock(topPanel, Dock.Top);
+
+        var buttonPanel = new StackPanel { Orientation = Orientation.Horizontal, HorizontalAlignment = HorizontalAlignment.Right };
+        var okBtn = new Button { Content = "确定", Width = 70, Margin = new Thickness(0, 0, 8, 0) };
+        var cancelBtn = new Button { Content = "取消", Width = 70 };
+        buttonPanel.Children.Add(okBtn);
+        buttonPanel.Children.Add(cancelBtn);
+        DockPanel.SetDock(buttonPanel, Dock.Bottom);
+
+        var scroll = new ScrollViewer { VerticalScrollBarVisibility = ScrollBarVisibility.Auto };
+        var panel = new StackPanel();
+        var checkMap = new Dictionary<DataGridColumn, CheckBox>();
+        foreach (var column in DetailDataGrid.Columns)
+        {
+            var cb = new CheckBox
+            {
+                Content = column.Header?.ToString() ?? "(无名列)",
+                IsChecked = column.Visibility == Visibility.Visible,
+                Margin = new Thickness(0, 4, 0, 4)
+            };
+            checkMap[column] = cb;
+            panel.Children.Add(cb);
+        }
+
+        void ApplyFilter()
+        {
+            var keyword = searchBox.Text?.Trim() ?? string.Empty;
+            foreach (var cb in checkMap.Values)
+            {
+                var text = cb.Content?.ToString() ?? string.Empty;
+                cb.Visibility = string.IsNullOrWhiteSpace(keyword) ||
+                                text.Contains(keyword, StringComparison.OrdinalIgnoreCase)
+                    ? Visibility.Visible
+                    : Visibility.Collapsed;
+            }
+        }
+
+        searchBox.TextChanged += (_, _) => ApplyFilter();
+        selectAllBtn.Click += (_, _) =>
+        {
+            foreach (var cb in checkMap.Values.Where(x => x.Visibility == Visibility.Visible))
+            {
+                cb.IsChecked = true;
+            }
+        };
+        deselectAllBtn.Click += (_, _) =>
+        {
+            foreach (var cb in checkMap.Values.Where(x => x.Visibility == Visibility.Visible))
+            {
+                cb.IsChecked = false;
+            }
+        };
+
+        scroll.Content = panel;
+        root.Children.Add(topPanel);
+        root.Children.Add(buttonPanel);
+        root.Children.Add(scroll);
+        dialog.Content = root;
+
+        okBtn.Click += (_, _) => dialog.DialogResult = true;
+        cancelBtn.Click += (_, _) => dialog.DialogResult = false;
+
+        if (dialog.ShowDialog() == true)
+        {
+            foreach (var kv in checkMap)
+            {
+                kv.Key.Visibility = kv.Value.IsChecked == true ? Visibility.Visible : Visibility.Collapsed;
+            }
+        }
+    }
+
+    private void MenuItem_QuickFilter_Click(object sender, RoutedEventArgs e)
+    {
+        if (DataContext is not MainViewModel vm) return;
+
+        var columnName = DetailDataGrid.CurrentCell.Column?.Header?.ToString();
+        if (string.IsNullOrWhiteSpace(columnName))
+        {
+            MessageBox.Show("请先选中一个列单元格，再执行过滤", "提示", MessageBoxButton.OK, MessageBoxImage.Information);
+            return;
+        }
+
+        var dialog = new FilterDialog(columnName, vm.GetNextFilterIndex())
+        {
+            Owner = this
+        };
+
+        if (dialog.ShowDialog() == true)
+        {
+            vm.AddFilter(dialog.FilterName, dialog.ColumnName, dialog.FilterValue);
+            vm.StatusMessage = $"已添加筛选: {dialog.FilterName}";
+        }
+    }
+
+    private async void MenuItem_SqlQuery_Click(object sender, RoutedEventArgs e)
+    {
+        if (DataContext is not MainViewModel vm) return;
+        if (!vm.IsConnected)
+        {
+            MessageBox.Show("请先连接数据库", "提示", MessageBoxButton.OK, MessageBoxImage.Information);
+            return;
+        }
+
+        var suggestedTable = !string.IsNullOrWhiteSpace(vm.CurrentTableName)
+            ? vm.CurrentTableName
+            : vm.SelectedResult?.TableName;
+        var escapedTable = string.IsNullOrWhiteSpace(suggestedTable)
+            ? "your_table"
+            : suggestedTable.Replace("`", "``");
+
+        var inputWindow = new Window
+        {
+            Title = "SQL 查询（仅 SELECT）",
+            Width = 700,
+            Height = 420,
+            WindowStartupLocation = WindowStartupLocation.CenterOwner,
+            Owner = this
+        };
+
+        var root = new DockPanel { Margin = new Thickness(12) };
+        var sqlBox = new TextBox
+        {
+            AcceptsReturn = true,
+            VerticalScrollBarVisibility = ScrollBarVisibility.Auto,
+            TextWrapping = TextWrapping.Wrap,
+            Text = $"SELECT * FROM `{escapedTable}` LIMIT 100;"
+        };
+
+        var buttonPanel = new StackPanel { Orientation = Orientation.Horizontal, HorizontalAlignment = HorizontalAlignment.Right, Margin = new Thickness(0, 10, 0, 0) };
+        var runBtn = new Button { Content = "执行", Width = 80, Margin = new Thickness(0, 0, 8, 0) };
+        var cancelBtn = new Button { Content = "取消", Width = 80 };
+        buttonPanel.Children.Add(runBtn);
+        buttonPanel.Children.Add(cancelBtn);
+        DockPanel.SetDock(buttonPanel, Dock.Bottom);
+
+        root.Children.Add(buttonPanel);
+        root.Children.Add(sqlBox);
+        inputWindow.Content = root;
+
+        runBtn.Click += (_, _) => inputWindow.DialogResult = true;
+        cancelBtn.Click += (_, _) => inputWindow.DialogResult = false;
+
+        if (inputWindow.ShowDialog() != true) return;
+
+        try
+        {
+            var rows = await vm.DatabaseService.ExecuteSelectQueryAsync(sqlBox.Text);
+            var dt = BuildDataTableFromRows(rows);
+            vm.CurrentDataTable = dt;
+            vm.StatusMessage = $"SQL 查询完成，共 {dt.Rows.Count} 条记录";
+        }
+        catch (Exception ex)
+        {
+            MessageBox.Show($"SQL 查询失败: {ex.Message}", "错误", MessageBoxButton.OK, MessageBoxImage.Error);
+        }
+    }
+
+    private async void MenuItem_ExportQueryResult_Click(object sender, RoutedEventArgs e)
+    {
+        if (DataContext is not MainViewModel vm) return;
+        if (vm.CurrentDataTable == null)
+        {
+            MessageBox.Show("当前没有可导出的查询结果", "提示", MessageBoxButton.OK, MessageBoxImage.Information);
+            return;
+        }
+
+        var exportChoice = MessageBox.Show(
+            "导出当前页请选择【是】\n导出全部请选择【否】",
+            "导出查询结果",
+            MessageBoxButton.YesNoCancel,
+            MessageBoxImage.Question);
+
+        if (exportChoice == MessageBoxResult.Cancel)
+        {
+            return;
+        }
+
+        DataTable exportTable;
+        if (exportChoice == MessageBoxResult.Yes)
+        {
+            exportTable = vm.CurrentDataTable.Copy();
+        }
+        else
+        {
+            if (string.IsNullOrWhiteSpace(vm.SearchText) && !string.IsNullOrEmpty(vm.CurrentTableName) && vm.IsConnected)
+            {
+                var rows = await vm.DatabaseService.GetAllTableRowsAsync(vm.CurrentTableName);
+                exportTable = BuildDataTableFromRows(rows);
+            }
+            else if (vm.SelectedResult != null && vm.SelectedResult.MatchedRows.Count > 0)
+            {
+                exportTable = BuildDataTableFromRows(vm.SelectedResult.MatchedRows);
+            }
+            else
+            {
+                exportTable = vm.CurrentDataTable.Copy();
+            }
+        }
+
+        var saveDialog = new SaveFileDialog
+        {
+            Filter = "CSV 文件 (*.csv)|*.csv",
+            FileName = $"query_result_{DateTime.Now:yyyyMMdd_HHmmss}.csv"
+        };
+
+        if (saveDialog.ShowDialog() != true)
+        {
+            return;
+        }
+
+        try
+        {
+            using var writer = new StreamWriter(saveDialog.FileName, false, Encoding.UTF8);
+            var headers = exportTable.Columns.Cast<DataColumn>().Select(c => EscapeCsvField(c.ColumnName));
+            writer.WriteLine(string.Join(",", headers));
+
+            foreach (DataRow row in exportTable.Rows)
+            {
+                var values = row.ItemArray.Select(v => EscapeCsvField(v?.ToString() ?? ""));
+                writer.WriteLine(string.Join(",", values));
+            }
+
+            vm.StatusMessage = $"导出成功：{exportTable.Rows.Count} 行";
+        }
+        catch (Exception ex)
+        {
+            MessageBox.Show($"导出失败: {ex.Message}", "错误", MessageBoxButton.OK, MessageBoxImage.Error);
+        }
+    }
+
+    private static DataTable BuildDataTableFromRows(IReadOnlyList<Dictionary<string, object?>> rows)
+    {
+        var dt = new DataTable();
+        if (rows.Count == 0)
+        {
+            return dt;
+        }
+
+        foreach (var key in rows[0].Keys)
+        {
+            dt.Columns.Add(key, typeof(string));
+        }
+
+        foreach (var row in rows)
+        {
+            var dr = dt.NewRow();
+            foreach (var kv in row)
+            {
+                dr[kv.Key] = kv.Value?.ToString() ?? "";
+            }
+            dt.Rows.Add(dr);
+        }
+
+        return dt;
     }
 }

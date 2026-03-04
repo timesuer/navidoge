@@ -272,6 +272,33 @@
                            Foreground="#888" FontSize="12"
                            Visibility="{Binding DetailTitle, Converter={StaticResource StringToVisibilityConverter}, ConverterParameter=invert}"/>
 
+                <StackPanel Orientation="Horizontal" Margin="0,5,0,0"
+                            Visibility="{Binding HasDetailPaging, Converter={StaticResource BoolToVisibilityConverter}}">
+                    <Button Content="上一页"
+                            Command="{Binding PrevDetailPageCommand}"
+                            Style="{StaticResource SmallButtonStyle}"/>
+                    <TextBlock Text="{Binding DetailPageInfo}" VerticalAlignment="Center" Margin="5,0" Foreground="#666"/>
+                    <Button Content="下一页"
+                            Command="{Binding NextDetailPageCommand}"
+                            Style="{StaticResource SmallButtonStyle}" Margin="0,0,0,0"/>
+                    <Button Content="显示筛选"
+                            Click="MenuItem_ShowColumnSelector_Click"
+                            Style="{StaticResource SmallButtonStyle}"
+                            Margin="10,0,5,0"/>
+                    <Button Content="过滤"
+                            Click="MenuItem_QuickFilter_Click"
+                            Style="{StaticResource SmallButtonStyle}"
+                            Margin="0,0,5,0"/>
+                    <Button Content="SQL 查询"
+                            Click="MenuItem_SqlQuery_Click"
+                            Style="{StaticResource SmallButtonStyle}"
+                            Margin="0,0,5,0"/>
+                    <Button Content="导出查询结果"
+                            Click="MenuItem_ExportQueryResult_Click"
+                            Style="{StaticResource SmallButtonStyle}"
+                            Margin="0,0,0,0"/>
+                </StackPanel>
+
                 <!-- 筛选标签区域 -->
                 <ItemsControl ItemsSource="{Binding FilterConditions}" Margin="0,5,0,0">
                     <ItemsControl.ItemsPanel>
@@ -330,6 +357,13 @@
                 </DataGrid.CellStyle>
                 <DataGrid.ContextMenu>
                     <ContextMenu>
+                        <MenuItem Header="工具">
+                            <MenuItem Header="显示筛选" Click="MenuItem_ShowColumnSelector_Click"/>
+                            <MenuItem Header="过滤" Click="MenuItem_QuickFilter_Click"/>
+                            <MenuItem Header="SQL 查询" Click="MenuItem_SqlQuery_Click"/>
+                            <MenuItem Header="导出查询结果" Click="MenuItem_ExportQueryResult_Click"/>
+                        </MenuItem>
+                        <Separator/>
                         <MenuItem Header="删除选中行" Click="MenuItem_DeleteRows_Click"/>
                         <Separator/>
                         <MenuItem Header="复制单元格" Click="MenuItem_CopyCellData_Click"/>
